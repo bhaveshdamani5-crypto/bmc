@@ -17,7 +17,7 @@ create table orders (
   guest_note text,
   guest_phone text,
   idempotency_key text unique,
-  access_token text unique not null default encode(gen_random_bytes(16), 'hex'), -- guest status link
+  access_token text unique not null default encode(extensions.gen_random_bytes(16), 'hex'), -- guest status link
   created_at timestamptz not null default now(),
   paid_at timestamptz,
   updated_at timestamptz not null default now(),

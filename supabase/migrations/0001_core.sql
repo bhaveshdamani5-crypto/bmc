@@ -1,5 +1,6 @@
 -- 0001_core.sql : tenants, staff, tables, menu
-create extension if not exists "pgcrypto";
+create schema if not exists extensions;
+create extension if not exists "pgcrypto" with schema extensions;
 
 create or replace function set_updated_at() returns trigger
 language plpgsql as $$
@@ -44,7 +45,7 @@ create table tables (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references restaurants(id) on delete cascade,
   label text not null,
-  token text unique not null default encode(gen_random_bytes(12), 'hex'),
+  token text unique not null default encode(extensions.gen_random_bytes(12), 'hex'),
   is_active boolean not null default true,
   unique (restaurant_id, label)
 );
