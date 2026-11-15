@@ -1,0 +1,90 @@
+# TableTap: setup from zero, and what is still not built
+
+Follow in order. Items marked **(you)** need your own accounts, money, or a decision. Nothing here has been run against a live Supabase project yet, so expect to fix small things on first contact and tell me what breaks.
+
+## Part A. Run it on your laptop with no accounts (2 minutes)
+1. Install Node.js 22 or newer.
+2. `cd apps/web && npm install && npm run dev`
+3. Open `http://localhost:3000/brew-moon/t/devtoken-brew-01`. You get the full guest menu and cart.
+4. "Pay" will say Supabase is not connected. That is expected. Continue with Part B.
+
+## Part B. Connect the database (Supabase)
+1. **(you)** Create a free account at supabase.com. Create a project, region **Mumbai (ap-south-1)** if shown. Save the database password.
+2. In the project dashboard, open **Project Settings, API**. Copy three values: the Project URL, the anon (public) key, and the service_role (secret) key. The secret key bypasses all security. Never put it in code, chat or GitHub.
+3. In `apps/web`, run `cp .env.example .env.local` and fill the three values. Keep `DEV_SIMULATE_PAYMENT=true` and `NEXT_PUBLIC_DEV_SIMULATE_PAYMENT=true` for now.
+4. From the repo root, install the Supabase CLI and push the schema:
+   ```
+   npx supabase init            # answer "no" to editor settings; keep the existing migrations folder
+   npx supabase login
+   npx supabase link --project-ref <your-project-ref>     # the ref is in your dashboard URL
+   npx supabase db push         # applies the 5 migrations in supabase/migrations
+   ```
+5. Load the demo cafe and menu: dashboard, **SQL Editor**, paste all of `supabase/seed.sql`, Run. **Do this only on a throwaway dev project.** Its table tokens are guessable.
+6. Dashboard, **Authentication, Sign In / Providers**: switch OFF "Allow new users to sign up". Only you create staff.
+7. Dashboard, **Database, Publications**: confirm the `orders` table is under `supabase_realtime` (the migration adds it).
+8. Create a kitchen login:
+   ```
+   cd apps/web
+   node --env-file=.env.local scripts/create-staff.mjs kitchen@example.com 'a-long-password' kitchen brew-moon
+   node --env-file=.env.local scripts/create-staff.mjs you@example.com 'another-long-password' owner brew-moon
+   ```
+9. Restart `npm run dev`, then test the whole loop:
+   - Phone or tab 1: `/brew-moon/t/devtoken-brew-01`, add items, **Place test order**. You land on the order status page.
+   - Tab 2: `/login` as the kitchen user, then press **Start shift**. The order appears with a sound. Press Accept, Start preparing, Mark ready, Mark served.
+   - Tab 1 updates its status every 3 seconds.
+   - In the kitchen, open **Out of stock**, mark an item sold out, reload the guest menu: it shows Sold out.
+10. Optional: confirm isolation yourself. `bash supabase/tests/run-local.sh` runs the 41 security tests on any local Postgres.
+
+## Part C. Real QR codes for real tables
+For a real cafe (not the seed demo), create its rows first: a restaurant, tables and menu. There is **no owner dashboard yet**, so today that means SQL or editing `supabase/seed/menu.mjs` with a new restaurant. Then:
+```
+cd apps/web
+node --env-file=.env.local scripts/make-qr.mjs <restaurant-slug> https://your-domain.com
+```
+This writes one PNG per table into `apps/web/qr/`. Print them on table stands. Test each by scanning it with a phone.
+
+## Part D. Put it online
+1. **(you)** Create a GitHub repo and push this folder. The CI workflow runs tests automatically.
+2. **(you)** Create a Vercel account, import the repo, set **Root Directory** to `apps/web`, and add the env vars from `.env.local` (set `NEXT_PUBLIC_APP_URL` to your Vercel/real domain). Do not set the `DEV_SIMULATE_PAYMENT` variables in production; the code ignores them there anyway.
+3. **(you)** Buy a domain if you want a branded URL, then connect it in Vercel.
+4. **(you)** Create a Sentry project and add `@sentry/nextjs` with your DSN. Add an UptimeRobot monitor on `/api/health`.
+5. Use a **separate Supabase project for production**, with no seed data.
+
+## Part E. Real payments (the next big step)
+1. **(you)** Call Razorpay and Cashfree sales. Ask which product lets a software vendor take payments for many cafes, whether each cafe needs its own account, settlement time for UPI, and fees. Get answers in writing.
+2. **(you)** Open the chosen gateway account in test mode and share the test key id and secret with your own `.env.local` (never with anyone else).
+3. Then build Step 5 from `content.md`: gateway order creation, checkout, signed webhook, refunds, reconciliation. The fake payment in `app/actions/guest.ts` is the exact spot to replace.
+
+## What is built and tested (here, without live accounts)
+| Area | State |
+|---|---|
+| Database schema, security rules, seed (158 items), 41 isolation tests | Built, passes on real Postgres |
+| Guest menu, options, cart, tax totals | Built, checked in a phone-sized browser |
+| Server-side price check and order state machine | Built, 19 unit tests |
+| `createOrder`, `transitionOrder`, fake payment, order status page | Built, compiles; **not run against live Supabase** |
+| Staff login, kitchen board (sound, realtime plus polling, disconnect banner, reject, out-of-stock) | Built, compiles; **not run against live Supabase** |
+| QR generator, staff creation script | Built, **not run against live Supabase** |
+| CI workflow | Built, untested until pushed to GitHub |
+
+## What is NOT built yet
+| Missing | Why / what it needs |
+|---|---|
+| Real payments, webhooks, refunds, reconciliation (Step 5) | Needs your gateway account and answers from their sales team |
+| Owner dashboard: menu editor, table manager, settings, staff invites, reports (Step 6) | Buildable next; no outside account needed |
+| Printable QR page inside the app | The script covers it for now |
+| Receipts by WhatsApp or email, daily owner summary, alerts to you (Step 7) | Needs WhatsApp Business or email provider accounts |
+| Background job worker and nightly jobs | Needs a decision on Vercel Cron vs Supabase scheduling; buildable next |
+| Self-serve signup, onboarding checklist, trial limits (Step 8) | Buildable next |
+| Subscription billing for cafes (Step 8) | Needs a gateway with recurring payments, and the Step 5 answer |
+| Super-admin platform panel (Step 8) | Buildable next |
+| Terms, privacy policy, merchant agreement | Needs a lawyer or a reviewed template |
+| GST invoice format | Needs your accountant's answer (see `content.md` section 14) |
+| End-to-end browser tests, load tests, security review (Step 9) | Best done once payments exist |
+| Pilot with a real cafe (Step 10) | Needs everything above plus real people |
+| Sentry error tracking | Needs your Sentry account |
+
+## Known rough edges
+- Placing an order is not one atomic database transaction. If saving items fails, the order is deleted again; a cleaner version would be a single database function.
+- The cart is lost on page refresh.
+- An invalid QR shows a friendly message but with HTTP status 200.
+- Only the kitchen sees orders; there is no separate waiter screen.
