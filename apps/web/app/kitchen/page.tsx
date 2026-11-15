@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { getStaff } from '@/lib/auth/staff';
 import { isSupabaseConfigured } from '@/lib/env';
 import { KitchenBoard } from '@/components/kitchen-board';
 
-export default function KitchenPage() {
+export default async function KitchenPage() {
+  await connection();
   return <Suspense fallback={<p className="p-8">Loading…</p>}><Gate /></Suspense>;
 }
 async function Gate() {

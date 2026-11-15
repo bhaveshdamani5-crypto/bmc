@@ -14,3 +14,10 @@ export function formatRupees(paise: number): string {
 export function rupeesToPaise(rupees: number): number {
   return Math.round(rupees * 100);
 }
+
+/** Parse an owner-typed rupee amount like "170" or "170.50" into paise. Returns null if invalid. */
+export function parseRupeesToPaise(input: string): number | null {
+  const s = input.trim();
+  if (!/^\d{1,6}(\.\d{1,2})?$/.test(s)) return null;
+  return Math.round(parseFloat(s) * 100);
+}
